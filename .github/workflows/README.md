@@ -17,15 +17,17 @@
 ## 触发条件
 
 Workflow 会在以下情况触发：
-1. 推送标签（格式：`v*`，如 `v1.0.0`）
-2. 创建 Pull Request
-3. 手动触发（在 GitHub Actions 页面）
+1. **推送标签**（格式：`v*`，如 `v1.0.0`）：自动构建所有平台并创建 Release
+2. **Pull Request**：自动构建所有平台，产物上传为 Artifacts
+3. **手动触发**：可以选择构建特定平台或所有平台
 
 ## 配置说明
 
 ### 桌面平台构建
 
 桌面平台构建会自动运行，无需额外配置。构建产物会自动上传到 GitHub Releases（仅当推送标签时）。
+
+**注意**：Windows 构建使用 PowerShell 语法，其他平台使用 bash 语法，已自动处理。
 
 ### Android 构建
 
@@ -62,7 +64,22 @@ iOS 构建需要配置以下 GitHub Secrets（在仓库 Settings > Secrets and v
 1. 在 GitHub 仓库页面，点击 "Actions" 标签
 2. 选择 "Build Tauri App" workflow
 3. 点击 "Run workflow" 按钮
-4. 选择分支并运行
+4. 选择分支
+5. 在 "Platforms to build" 输入框中输入要构建的平台（逗号分隔）：
+   - `all` - 构建所有平台（默认）
+   - `macos-aarch64` - 仅构建 macOS (Apple Silicon)
+   - `macos-x86_64` - 仅构建 macOS (Intel)
+   - `linux` - 仅构建 Linux
+   - `windows` - 仅构建 Windows
+   - `android` - 仅构建 Android
+   - `ios` - 仅构建 iOS
+   - 多个平台：`macos-aarch64,linux,windows` - 构建多个指定平台
+6. 点击 "Run workflow" 运行
+
+**示例**：
+- 只构建 Windows：输入 `windows`
+- 构建 macOS 和 Linux：输入 `macos-aarch64,macos-x86_64,linux`
+- 构建所有桌面平台：输入 `macos-aarch64,macos-x86_64,linux,windows`
 
 ## 构建产物
 
