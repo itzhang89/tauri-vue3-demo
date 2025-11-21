@@ -8,20 +8,16 @@ use tokio_util::compat::TokioAsyncWriteCompatExt;
 pub struct SQLServerConnector;
 
 impl ConnectionTester for SQLServerConnector {
-    fn test_connection(data_source: &DataSource) -> Result<()> {
-        let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(async {
-            Self::create_client(data_source)
-                .await
-                .context("Failed to create SQL Server connection")?;
-            Ok::<(), anyhow::Error>(())
-        })?;
+    async fn test_connection(data_source: &DataSource) -> Result<()> {
+        Self::create_client(data_source)
+            .await
+            .context("Failed to create SQL Server connection")?;
         Ok(())
     }
 }
 
 impl SQLServerConnector {
-    pub async fn create_client(data_source: &DataSource) -> Result<Client<TokioAsyncWriteCompatExt<TcpStream>>> {
+    pub async fn create_client(data_source: &DataSource) -> Result<Client<tokio_util::compat::Compat<TcpStream>>> {
         let mut config = Config::new();
         config.host(data_source.host.clone());
         config.port(data_source.port);
@@ -39,7 +35,8 @@ impl SQLServerConnector {
         
         tcp.set_nodelay(true)?;
         
-        let client = Client::connect(config, tcp.compat_write())
+        let compat_stream = tcp.compat_write();
+        let client = Client::connect(config, compat_stream)
             .await
             .context("Failed to establish SQL Server connection")?;
         

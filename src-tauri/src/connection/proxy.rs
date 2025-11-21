@@ -105,49 +105,18 @@ impl ProxyManager {
         }
     }
 
-    pub async fn create_ssh_tunnel(ssh: &SshConfig) -> Result<()> {
+    pub async fn create_ssh_tunnel(_ssh: &SshConfig) -> Result<()> {
         // SSH tunnel implementation using russh
-        // This is a simplified version - in production, you'd want to manage the tunnel lifecycle
-        // Note: This is a placeholder implementation. Full SSH tunnel management would require
-        // maintaining the SSH session and forwarding connections through the tunnel.
-        use russh::*;
-        use russh_keys::*;
-        use std::sync::Arc;
+        // This is a simplified placeholder implementation.
+        // Full SSH tunnel management would require:
+        // 1. Creating a Handler struct that implements russh::client::Handler
+        // 2. Maintaining the SSH session lifecycle
+        // 3. Setting up port forwarding through the tunnel
+        // 
+        // For now, this is a stub that will be implemented when needed.
+        // Users can use SSH port forwarding manually via: ssh -L local_port:remote_host:remote_port user@ssh_host
         
-        // Create SSH client config
-        let config = russh::client::Config::default();
-        let config = Arc::new(config);
-        
-        // Connect to SSH server
-        let mut session = russh::client::connect(
-            config,
-            (ssh.host.as_str(), ssh.port),
-            &ssh.username,
-        )
-        .await
-        .context("Failed to connect to SSH server")?;
-
-        // Authenticate
-        if let Some(key_path) = &ssh.private_key_path {
-            let key = load_secret_key(key_path, None)
-                .context("Failed to load SSH private key")?;
-            session
-                .authenticate_publickey(&ssh.username, Arc::new(key))
-                .await
-                .context("SSH public key authentication failed")?;
-        } else if let Some(password) = &ssh.password {
-            session
-                .authenticate_password(&ssh.username, password.clone())
-                .await
-                .context("SSH password authentication failed")?;
-        } else {
-            return Err(anyhow::anyhow!("SSH authentication method not specified"));
-        }
-
-        // Note: Actual port forwarding would require maintaining the session
-        // and forwarding TCP connections. This is a simplified test.
-        
-        Ok(())
+        Err(anyhow::anyhow!("SSH tunnel implementation is not yet complete. Please use manual SSH port forwarding or implement a full Handler."))
     }
 }
 

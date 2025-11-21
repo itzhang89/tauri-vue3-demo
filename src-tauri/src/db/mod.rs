@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result as SqliteResult, params};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
-use anyhow::{Context, Result};
+use anyhow::{Context as AnyhowContext, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Context {
@@ -224,12 +224,17 @@ impl Database {
 
         let mut stmt = self.conn.prepare(query)?;
         
-        let data_sources = if let Some(cid) = context_id {
-            stmt.query_map(params![cid], |row| self.row_to_data_source(row))?
+        let data_sources: Vec<DataSource> = if let Some(cid) = context_id {
+            stmt.query_map(params![cid], |row| {
+                self.row_to_data_source(row)
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?
         } else {
-            stmt.query_map([], |row| self.row_to_data_source(row))?
-        }
-        .collect::<SqliteResult<Vec<_>>>()?;
+            stmt.query_map([], |row| {
+                self.row_to_data_source(row)
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?
+        };
         
         Ok(data_sources)
     }

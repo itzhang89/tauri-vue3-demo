@@ -40,11 +40,7 @@ impl CacheManager {
             expires_at: Some(expires_at),
         };
         
-        let db = Database::get_db()?;
-        if let Some(ref db) = *db {
-            db.save_metadata_cache(&cache)?;
-        }
-        
+        Self::save_cache(&cache)?;
         Ok(tables)
     }
 
@@ -84,11 +80,7 @@ impl CacheManager {
             expires_at: Some(expires_at),
         };
         
-        let db = Database::get_db()?;
-        if let Some(ref db) = *db {
-            db.save_metadata_cache(&cache)?;
-        }
-        
+        Self::save_cache(&cache)?;
         Ok(table)
     }
 
@@ -123,11 +115,7 @@ impl CacheManager {
             expires_at: Some(expires_at),
         };
         
-        let db = Database::get_db()?;
-        if let Some(ref db) = *db {
-            db.save_metadata_cache(&cache)?;
-        }
-        
+        Self::save_cache(&cache)?;
         Ok(topics)
     }
 
@@ -162,17 +150,14 @@ impl CacheManager {
             expires_at: Some(expires_at),
         };
         
-        let db = Database::get_db()?;
-        if let Some(ref db) = *db {
-            db.save_metadata_cache(&cache)?;
-        }
-        
+        Self::save_cache(&cache)?;
         Ok(schemas)
     }
 
     pub fn clear_cache(data_source_id: i64, cache_type: Option<&str>) -> Result<()> {
-        let db = Database::get_db()?;
-        if let Some(ref db) = *db {
+        use crate::db::get_db;
+        let db_guard = get_db()?;
+        if let Some(ref db) = *db_guard {
             db.delete_metadata_cache(data_source_id, cache_type)?;
         }
         Ok(())
@@ -183,12 +168,26 @@ impl CacheManager {
         cache_type: &str,
         cache_key: &str,
     ) -> Result<Option<MetadataCache>> {
-        let db = Database::get_db()?;
-        if let Some(ref db) = *db {
-            Ok(db.get_metadata_cache(data_source_id, cache_type, cache_key)?)
-        } else {
-            Ok(None)
+        use crate::db::get_db;
+        // Get cache data before any async operations
+        let cached_data = {
+            let db_guard = get_db()?;
+            if let Some(ref db) = *db_guard {
+                db.get_metadata_cache(data_source_id, cache_type, cache_key)?
+            } else {
+                None
+            }
+        };
+        Ok(cached_data)
+    }
+    
+    fn save_cache(cache: &MetadataCache) -> Result<()> {
+        use crate::db::get_db;
+        let db_guard = get_db()?;
+        if let Some(ref db) = *db_guard {
+            db.save_metadata_cache(cache)?;
         }
+        Ok(())
     }
 }
 

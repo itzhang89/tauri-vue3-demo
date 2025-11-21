@@ -6,6 +6,7 @@ use std::collections::HashMap;
 pub mod mysql;
 pub mod postgresql;
 pub mod sqlserver;
+#[cfg(feature = "kafka")]
 pub mod kafka;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,18 +104,38 @@ impl MetadataFetcher {
         }
     }
 
+    #[cfg(feature = "kafka")]
     pub async fn get_kafka_topics(data_source: &DataSource) -> Result<Vec<KafkaTopicInfo>> {
         kafka::KafkaMetadata::get_topics(data_source).await
     }
 
+    #[cfg(not(feature = "kafka"))]
+    pub async fn get_kafka_topics(_data_source: &DataSource) -> Result<Vec<KafkaTopicInfo>> {
+        Err(anyhow::anyhow!("Kafka support is not enabled. Build with --features kafka"))
+    }
+
+    #[cfg(feature = "kafka")]
     pub async fn get_kafka_consumer_groups(data_source: &DataSource) -> Result<Vec<String>> {
         kafka::KafkaMetadata::get_consumer_groups(data_source).await
     }
 
+    #[cfg(not(feature = "kafka"))]
+    pub async fn get_kafka_consumer_groups(_data_source: &DataSource) -> Result<Vec<String>> {
+        Err(anyhow::anyhow!("Kafka support is not enabled. Build with --features kafka"))
+    }
+
+    #[cfg(feature = "kafka")]
     pub async fn get_schema_registry_schemas(
         data_source: &DataSource,
     ) -> Result<Vec<SchemaInfo>> {
         kafka::KafkaMetadata::get_schema_registry_schemas(data_source).await
+    }
+
+    #[cfg(not(feature = "kafka"))]
+    pub async fn get_schema_registry_schemas(
+        _data_source: &DataSource,
+    ) -> Result<Vec<SchemaInfo>> {
+        Err(anyhow::anyhow!("Kafka support is not enabled. Build with --features kafka"))
     }
 
     pub async fn compare_tables(
@@ -151,10 +172,10 @@ impl MetadataFetcher {
     fn compare_structure(table1: &TableInfo, table2: &TableInfo) -> Vec<StructureDiff> {
         let mut diffs = Vec::new();
         
-        let mut cols1: HashMap<String, &ColumnInfo> = table1.columns.iter()
+        let cols1: HashMap<String, &ColumnInfo> = table1.columns.iter()
             .map(|c| (c.name.clone(), c))
             .collect();
-        let mut cols2: HashMap<String, &ColumnInfo> = table2.columns.iter()
+        let cols2: HashMap<String, &ColumnInfo> = table2.columns.iter()
             .map(|c| (c.name.clone(), c))
             .collect();
         

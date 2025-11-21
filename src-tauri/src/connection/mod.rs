@@ -6,6 +6,7 @@ pub mod proxy;
 pub mod mysql;
 pub mod postgresql;
 pub mod sqlserver;
+#[cfg(feature = "kafka")]
 pub mod kafka;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,18 +29,21 @@ pub struct SshConfig {
 }
 
 pub trait ConnectionTester {
-    fn test_connection(&self, data_source: &DataSource) -> Result<()>;
+    async fn test_connection(data_source: &DataSource) -> Result<()>;
 }
 
 pub struct ConnectionManager;
 
 impl ConnectionManager {
-    pub fn test_connection(data_source: &DataSource) -> Result<()> {
+    pub async fn test_connection(data_source: &DataSource) -> Result<()> {
         match data_source.data_type.as_str() {
-            "mysql" => mysql::MySQLConnector::test_connection(data_source),
-            "postgresql" => postgresql::PostgreSQLConnector::test_connection(data_source),
-            "sqlserver" => sqlserver::SQLServerConnector::test_connection(data_source),
-            "kafka" => kafka::KafkaConnector::test_connection(data_source),
+            "mysql" => mysql::MySQLConnector::test_connection(data_source).await,
+            "postgresql" => postgresql::PostgreSQLConnector::test_connection(data_source).await,
+            "sqlserver" => sqlserver::SQLServerConnector::test_connection(data_source).await,
+            #[cfg(feature = "kafka")]
+            "kafka" => kafka::KafkaConnector::test_connection(data_source).await,
+            #[cfg(not(feature = "kafka"))]
+            "kafka" => Err(anyhow::anyhow!("Kafka support is not enabled. Build with --features kafka")),
             _ => Err(anyhow::anyhow!("Unsupported data source type: {}", data_source.data_type)),
         }
     }

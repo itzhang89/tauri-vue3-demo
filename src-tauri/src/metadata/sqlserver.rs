@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use tiberius::{Client, Query, Row};
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 use tokio::net::TcpStream;
+use futures::StreamExt;
 
 pub struct SQLServerMetadata;
 
@@ -21,11 +22,23 @@ impl SQLServerMetadata {
         );
         
         let mut stream = Query::new(query).query(&mut client).await?;
-        let mut tables = Vec::new();
+        let mut table_names = Vec::new();
         
-        while let Some(row) = stream.into_row().await? {
-            if let Some(table_name) = row.get::<&str, _>(0) {
-                let structure = Self::get_table_structure(data_source, Some(schema), table_name).await?;
+        while let Some(item) = stream.next().await {
+            match item? {
+                tiberius::QueryItem::Row(row) => {
+                    if let Some(table_name) = row.get::<&str, _>(0) {
+                        table_names.push(table_name.to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        // Get structure for each table
+        let mut tables = Vec::new();
+        for table_name in &table_names {
+            if let Ok(structure) = Self::get_table_structure(data_source, Some(schema), table_name).await {
                 tables.push(structure);
             }
         }
@@ -63,24 +76,29 @@ impl SQLServerMetadata {
         let mut stream = Query::new(query).query(&mut client).await?;
         let mut columns = Vec::new();
         
-        while let Some(row) = stream.into_row().await? {
-            let name: String = row.get(0).unwrap_or_default();
-            let data_type: String = row.get(1).unwrap_or_default();
-            let is_nullable: String = row.get(2).unwrap_or_default();
-            let default_value: Option<String> = row.get(3);
-            let constraints_str: Option<String> = row.get(4);
-            
-            let constraints = constraints_str
-                .map(|s| s.split(',').map(|x| x.trim().to_string()).collect())
-                .unwrap_or_default();
-            
-            columns.push(ColumnInfo {
-                name,
-                data_type,
-                is_nullable: is_nullable == "YES",
-                default_value,
-                constraints,
-            });
+        while let Some(item) = stream.next().await {
+            match item? {
+                tiberius::QueryItem::Row(row) => {
+                    let name: String = row.get::<&str, _>(0).unwrap_or_default().to_string();
+                    let data_type: String = row.get::<&str, _>(1).unwrap_or_default().to_string();
+                    let is_nullable: String = row.get::<&str, _>(2).unwrap_or_default().to_string();
+                    let default_value: Option<String> = row.get::<&str, _>(3).map(|s| s.to_string());
+                    let constraints_str: Option<String> = row.get::<&str, _>(4).map(|s| s.to_string());
+                    
+                    let constraints = constraints_str
+                        .map(|s| s.split(',').map(|x| x.trim().to_string()).collect())
+                        .unwrap_or_default();
+                    
+                    columns.push(ColumnInfo {
+                        name,
+                        data_type,
+                        is_nullable: is_nullable == "YES",
+                        default_value,
+                        constraints,
+                    });
+                }
+                _ => {}
+            }
         }
         
         Ok(TableInfo {
@@ -105,9 +123,14 @@ impl SQLServerMetadata {
         );
         
         let mut stream = Query::new(query).query(&mut client).await?;
-        if let Some(row) = stream.into_row().await? {
-            if let Some(count) = row.get::<i32, _>(0) {
-                return Ok(count as i64);
+        if let Some(item) = stream.next().await {
+            match item? {
+                tiberius::QueryItem::Row(row) => {
+                    if let Some(count) = row.get::<i32, _>(0) {
+                        return Ok(count as i64);
+                    }
+                }
+                _ => {}
             }
         }
         

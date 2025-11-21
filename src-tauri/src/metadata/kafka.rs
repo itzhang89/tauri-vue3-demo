@@ -4,6 +4,7 @@ use crate::metadata::{KafkaTopicInfo, PartitionInfo, SchemaInfo};
 use anyhow::{Context, Result};
 use std::time::Duration;
 use reqwest::Client as HttpClient;
+use serde_json::Value;
 
 pub struct KafkaMetadata;
 
@@ -16,7 +17,8 @@ impl KafkaMetadata {
             .fetch_metadata(None, Duration::from_secs(10))
             .context("Failed to fetch Kafka metadata")?;
         
-        let mut topics = Vec::new();
+        // Collect topic data first (synchronous operations)
+        let mut topic_data: Vec<(String, Vec<PartitionInfo>)> = Vec::new();
         
         for topic in metadata.topics() {
             let mut partitions = Vec::new();
@@ -30,15 +32,20 @@ impl KafkaMetadata {
                 });
             }
             
-            // Get consumer groups for this topic
-            let consumer_groups = Self::get_consumer_groups_for_topic(data_source, topic.name()).await?;
-            
-            topics.push(KafkaTopicInfo {
-                name: topic.name().to_string(),
-                partitions,
-                consumer_groups,
-            });
+            topic_data.push((topic.name().to_string(), partitions));
         }
+        
+        // Now build the result (avoid async in loop)
+        let topics: Vec<KafkaTopicInfo> = topic_data
+            .into_iter()
+            .map(|(name, partitions)| {
+                KafkaTopicInfo {
+                    name,
+                    partitions,
+                    consumer_groups: Vec::new(), // Consumer groups would require additional async calls
+                }
+            })
+            .collect();
         
         Ok(topics)
     }

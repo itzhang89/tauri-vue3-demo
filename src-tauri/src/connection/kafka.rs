@@ -2,21 +2,17 @@ use crate::connection::ConnectionTester;
 use crate::db::DataSource;
 use anyhow::{Context, Result};
 use rdkafka::config::ClientConfig;
-use rdkafka::consumer::{Consumer, StreamConsumer};
+use rdkafka::consumer::StreamConsumer;
 use rdkafka::producer::FutureProducer;
 use std::time::Duration;
 
 pub struct KafkaConnector;
 
 impl ConnectionTester for KafkaConnector {
-    fn test_connection(data_source: &DataSource) -> Result<()> {
-        let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(async {
-            Self::create_admin_client(data_source)
-                .await
-                .context("Failed to create Kafka admin client")?;
-            Ok::<(), anyhow::Error>(())
-        })?;
+    async fn test_connection(data_source: &DataSource) -> Result<()> {
+        Self::create_admin_client(data_source)
+            .await
+            .context("Failed to create Kafka admin client")?;
         Ok(())
     }
 }

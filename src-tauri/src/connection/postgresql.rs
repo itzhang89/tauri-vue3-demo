@@ -8,14 +8,10 @@ use std::time::Duration;
 pub struct PostgreSQLConnector;
 
 impl ConnectionTester for PostgreSQLConnector {
-    fn test_connection(data_source: &DataSource) -> Result<()> {
-        let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(async {
-            Self::create_pool(data_source)
-                .await
-                .context("Failed to create PostgreSQL connection pool")?;
-            Ok::<(), anyhow::Error>(())
-        })?;
+    async fn test_connection(data_source: &DataSource) -> Result<()> {
+        Self::create_pool(data_source)
+            .await
+            .context("Failed to create PostgreSQL connection pool")?;
         Ok(())
     }
 }
@@ -54,7 +50,7 @@ impl PostgreSQLConnector {
             match proxy_type.as_str() {
                 "http" => {
                     if let Some(proxy_config) = &data_source.proxy_config {
-                        let proxy: ProxyConfig = serde_json::from_value(proxy_config.clone())
+                        let _proxy: ProxyConfig = serde_json::from_value(proxy_config.clone())
                             .context("Invalid proxy config")?;
                         // Note: sqlx doesn't directly support HTTP proxy for PostgreSQL
                         return Err(anyhow::anyhow!("HTTP proxy for PostgreSQL is not directly supported by sqlx"));

@@ -1,5 +1,5 @@
 use crate::commands::CreateDataSourceRequest;
-use crate::db::Database;
+use crate::db::{get_db, Database};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -37,11 +37,8 @@ pub async fn import_data_sources_from_yaml(
     let import_data: YamlImportData = serde_yaml::from_str(&content)
         .map_err(|e| format!("Failed to parse YAML: {}", e))?;
     
-    let db = Database::get_db().map_err(|e| e.to_string())?;
-    if db.is_none() {
-        return Err("Database not initialized".to_string());
-    }
-    let db = db.unwrap();
+    let db_guard = get_db().map_err(|e| e.to_string())?;
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
     
     // Determine context_id
     let final_context_id = if let Some(cid) = context_id {

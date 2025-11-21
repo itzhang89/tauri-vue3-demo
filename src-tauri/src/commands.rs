@@ -1,6 +1,6 @@
 use crate::cache::CacheManager;
 use crate::connection::ConnectionManager;
-use crate::db::{Database, DataSource};
+use crate::db::{get_db, DataSource};
 use crate::metadata::{MetadataFetcher, TableComparison};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 // Context commands
 #[tauri::command]
 pub async fn create_context(name: String, description: Option<String>) -> Result<i64, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         db.create_context(&name, description.as_deref())
             .map_err(|e| e.to_string())
@@ -19,7 +19,7 @@ pub async fn create_context(name: String, description: Option<String>) -> Result
 
 #[tauri::command]
 pub async fn list_contexts() -> Result<Vec<crate::db::Context>, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         db.list_contexts().map_err(|e| e.to_string())
     } else {
@@ -33,7 +33,7 @@ pub async fn update_context(
     name: String,
     description: Option<String>,
 ) -> Result<(), String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         db.update_context(id, &name, description.as_deref())
             .map_err(|e| e.to_string())
@@ -44,7 +44,7 @@ pub async fn update_context(
 
 #[tauri::command]
 pub async fn delete_context(id: i64) -> Result<(), String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         db.delete_context(id).map_err(|e| e.to_string())
     } else {
@@ -71,7 +71,7 @@ pub struct CreateDataSourceRequest {
 
 #[tauri::command]
 pub async fn create_data_source(req: CreateDataSourceRequest) -> Result<i64, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         let data_source = DataSource {
             id: 0,
@@ -98,7 +98,7 @@ pub async fn create_data_source(req: CreateDataSourceRequest) -> Result<i64, Str
 
 #[tauri::command]
 pub async fn list_data_sources(context_id: Option<i64>) -> Result<Vec<DataSource>, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         db.list_data_sources(context_id).map_err(|e| e.to_string())
     } else {
@@ -108,7 +108,7 @@ pub async fn list_data_sources(context_id: Option<i64>) -> Result<Vec<DataSource
 
 #[tauri::command]
 pub async fn get_data_source(id: i64) -> Result<DataSource, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         db.get_data_source(id).map_err(|e| e.to_string())
     } else {
@@ -118,7 +118,7 @@ pub async fn get_data_source(id: i64) -> Result<DataSource, String> {
 
 #[tauri::command]
 pub async fn update_data_source(data_source: DataSource) -> Result<(), String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         db.update_data_source(&data_source).map_err(|e| e.to_string())
     } else {
@@ -128,7 +128,7 @@ pub async fn update_data_source(data_source: DataSource) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn delete_data_source(id: i64) -> Result<(), String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
+    let db = get_db().map_err(|e| e.to_string())?;
     if let Some(ref db) = *db {
         db.delete_data_source(id).map_err(|e| e.to_string())
     } else {
@@ -138,7 +138,9 @@ pub async fn delete_data_source(id: i64) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn test_connection(data_source: DataSource) -> Result<(), String> {
-    ConnectionManager::test_connection(&data_source).map_err(|e| e.to_string())
+    ConnectionManager::test_connection(&data_source)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // Metadata commands
@@ -147,15 +149,17 @@ pub async fn get_tables(
     data_source_id: i64,
     force_refresh: bool,
 ) -> Result<Vec<crate::metadata::TableInfo>, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
-    if let Some(ref db) = *db {
-        let data_source = db.get_data_source(data_source_id).map_err(|e| e.to_string())?;
-        CacheManager::get_tables_cached(&data_source, force_refresh)
-            .await
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Database not initialized".to_string())
-    }
+    let data_source = {
+        let db = get_db().map_err(|e| e.to_string())?;
+        if let Some(ref db) = *db {
+            db.get_data_source(data_source_id).map_err(|e| e.to_string())?
+        } else {
+            return Err("Database not initialized".to_string());
+        }
+    };
+    CacheManager::get_tables_cached(&data_source, force_refresh)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -165,20 +169,22 @@ pub async fn get_table_structure(
     table_name: String,
     force_refresh: bool,
 ) -> Result<crate::metadata::TableInfo, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
-    if let Some(ref db) = *db {
-        let data_source = db.get_data_source(data_source_id).map_err(|e| e.to_string())?;
-        CacheManager::get_table_structure_cached(
-            &data_source,
-            schema.as_deref(),
-            &table_name,
-            force_refresh,
-        )
-        .await
-        .map_err(|e| e.to_string())
-    } else {
-        Err("Database not initialized".to_string())
-    }
+    let data_source = {
+        let db = get_db().map_err(|e| e.to_string())?;
+        if let Some(ref db) = *db {
+            db.get_data_source(data_source_id).map_err(|e| e.to_string())?
+        } else {
+            return Err("Database not initialized".to_string());
+        }
+    };
+    CacheManager::get_table_structure_cached(
+        &data_source,
+        schema.as_deref(),
+        &table_name,
+        force_refresh,
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -186,15 +192,17 @@ pub async fn get_kafka_topics(
     data_source_id: i64,
     force_refresh: bool,
 ) -> Result<Vec<crate::metadata::KafkaTopicInfo>, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
-    if let Some(ref db) = *db {
-        let data_source = db.get_data_source(data_source_id).map_err(|e| e.to_string())?;
-        CacheManager::get_kafka_topics_cached(&data_source, force_refresh)
-            .await
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Database not initialized".to_string())
-    }
+    let data_source = {
+        let db = get_db().map_err(|e| e.to_string())?;
+        if let Some(ref db) = *db {
+            db.get_data_source(data_source_id).map_err(|e| e.to_string())?
+        } else {
+            return Err("Database not initialized".to_string());
+        }
+    };
+    CacheManager::get_kafka_topics_cached(&data_source, force_refresh)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -202,15 +210,17 @@ pub async fn get_schema_registry_schemas(
     data_source_id: i64,
     force_refresh: bool,
 ) -> Result<Vec<crate::metadata::SchemaInfo>, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
-    if let Some(ref db) = *db {
-        let data_source = db.get_data_source(data_source_id).map_err(|e| e.to_string())?;
-        CacheManager::get_schema_registry_schemas_cached(&data_source, force_refresh)
-            .await
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Database not initialized".to_string())
-    }
+    let data_source = {
+        let db = get_db().map_err(|e| e.to_string())?;
+        if let Some(ref db) = *db {
+            db.get_data_source(data_source_id).map_err(|e| e.to_string())?
+        } else {
+            return Err("Database not initialized".to_string());
+        }
+    };
+    CacheManager::get_schema_registry_schemas_cached(&data_source, force_refresh)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -231,22 +241,27 @@ pub async fn compare_tables(
     schema2: Option<String>,
     table_name: String,
 ) -> Result<TableComparison, String> {
-    let db = Database::get_db().map_err(|e| e.to_string())?;
-    if let Some(ref db) = *db {
-        let source1 = db.get_data_source(source1_id).map_err(|e| e.to_string())?;
-        let source2 = db.get_data_source(source2_id).map_err(|e| e.to_string())?;
-        
-        MetadataFetcher::compare_tables(
-            &source1,
-            &source2,
-            schema1.as_deref(),
-            schema2.as_deref(),
-            &table_name,
-        )
-        .await
-        .map_err(|e| e.to_string())
-    } else {
-        Err("Database not initialized".to_string())
-    }
+    // Get data sources before await
+    let (source1, source2) = {
+        let db = get_db().map_err(|e| e.to_string())?;
+        if let Some(ref db) = *db {
+            let s1 = db.get_data_source(source1_id).map_err(|e| e.to_string())?;
+            let s2 = db.get_data_source(source2_id).map_err(|e| e.to_string())?;
+            (s1, s2)
+        } else {
+            return Err("Database not initialized".to_string());
+        }
+    };
+    
+    // Now we can await without holding the guard
+    MetadataFetcher::compare_tables(
+        &source1,
+        &source2,
+        schema1.as_deref(),
+        schema2.as_deref(),
+        &table_name,
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 

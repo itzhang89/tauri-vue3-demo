@@ -8,14 +8,10 @@ use std::time::Duration;
 pub struct MySQLConnector;
 
 impl ConnectionTester for MySQLConnector {
-    fn test_connection(data_source: &DataSource) -> Result<()> {
-        let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(async {
-            Self::create_pool(data_source)
-                .await
-                .context("Failed to create MySQL connection pool")?;
-            Ok::<(), anyhow::Error>(())
-        })?;
+    async fn test_connection(data_source: &DataSource) -> Result<()> {
+        Self::create_pool(data_source)
+            .await
+            .context("Failed to create MySQL connection pool")?;
         Ok(())
     }
 }
@@ -52,7 +48,7 @@ impl MySQLConnector {
             match proxy_type.as_str() {
                 "http" => {
                     if let Some(proxy_config) = &data_source.proxy_config {
-                        let proxy: ProxyConfig = serde_json::from_value(proxy_config.clone())
+                        let _proxy: ProxyConfig = serde_json::from_value(proxy_config.clone())
                             .context("Invalid proxy config")?;
                         // Note: sqlx doesn't directly support HTTP proxy for MySQL
                         // You might need to use a different approach or library
